@@ -1,0 +1,27 @@
+# Maven target directory
+target/
+
+# Spring Boot starter zip file
+aispringboot.zip
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build files
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Environment files
+.env
+.env.local
+.env.*.local
