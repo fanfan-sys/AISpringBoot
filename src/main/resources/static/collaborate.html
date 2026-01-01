@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>协作编辑 - 语雀文档</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: #1e88e5 !important;
+        }
+        
+        .collaborator-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            margin-left: -8px;
+            background-color: #1e88e5;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .collaborator-avatar:first-child {
+            margin-left: 0;
+        }
+        
+        .online-indicator {
+            width: 8px;
+            height: 8px;
+            background-color: #4caf50;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 4px;
+        }
+        
+        .editor-container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 20px;
+            padding: 30px;
+        }
+        
+        .ql-toolbar {
+            border: none !important;
+            border-bottom: 1px solid #e0e0e0 !important;
+            background-color: #fafafa;
+        }
+        
+        .ql-container {
+            border: none !important;
+            min-height: 500px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .collaboration-panel {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 20px;
+        }
+        
+        .activity-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-user {
+            font-weight: 500;
+            color: #1e88e5;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .version-item {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .version-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .version-item.current {
+            background-color: #e3f2fd;
+            border-color: #1e88e5;
+        }
+        
+        .version-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .btn-primary {
+            background-color: #1e88e5;
+            border-color: #1e88e5;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1565c0;
+            border-color: #1565c0;
+        }
+        
+        .cursor-indicator {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background-color: #1e88e5;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .cursor-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background-color: #1e88e5;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        
+        .typing-indicator {
+            font-style: italic;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .share-link {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-feather-alt"></i> 语雀文档
+            </a>
+            
+            <div class="navbar-nav ms-auto d-flex flex-row align-items-center">
+                <!-- 协作者头像 -->
+                <div class="me-3 d-flex align-items-center">
+                    <span class="me-2">在线协作者:</span>
+                    <div id="collaborators" class="d-flex">
+                        <!-- 动态生成协作者头像 -->
+                    </div>
+                </div>
+                
+                <!-- 当前用户信息 -->
+                <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user-circle"></i> <span id="usernameDisplay"></span>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="/">
+                            <i class="fas fa-arrow-left"></i> 返回文档列表
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i> 退出登录
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 主编辑区 -->
+            <div class="col-md-8">
+                <div class="editor-container">
+                    <div class="mb-3">
+                        <input type="text" class="form-control form-control-lg" id="documentTitle" placeholder="文档标题">
+                    </div>
+                    
+                    <div class="mb-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span id="typingIndicator" class="typing-indicator" style="display: none;">
+                                <i class="fas fa-keyboard"></i> 正在输入...
+                            </span>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-primary btn-sm" onclick="shareDocument()">
+                                <i class="fas fa-share-alt"></i> 分享
+                            </button>
+                            <button class="btn btn-primary btn-sm ms-2" onclick="saveDocument()">
+                                <i class="fas fa-save"></i> 保存
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="editor"></div>
+                </div>
+            </div>
+
+            <!-- 侧边栏 -->
+            <div class="col-md-4">
+                <!-- 协作者面板 -->
+                <div class="collaboration-panel mb-3">
+                    <h6 class="mb-3">
+                        <i class="fas fa-users"></i> 协作者
+                        <span class="badge bg-secondary ms-2" id="collaboratorCount">1</span>
+                    </h6>
+                    <div id="collaboratorList">
+                        <!-- 动态生成协作者列表 -->
+                    </div>
+                </div>
+
+                <!-- 活动历史 -->
+                <div class="collaboration-panel mb-3">
+                    <h6 class="mb-3">
+                        <i class="fas fa-history"></i> 活动历史
+                    </h6>
+                    <div id="activityList" style="max-height: 200px; overflow-y: auto;">
+                        <!-- 动态生成活动历史 -->
+                    </div>
+                </div>
+
+                <!-- 版本历史 -->
+                <div class="collaboration-panel">
+                    <h6 class="mb-3">
+                        <i class="fas fa-code-branch"></i> 版本历史
+                        <button class="btn btn-sm btn-outline-secondary float-end" onclick="loadVersions()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </h6>
+                    <div id="versionList" style="max-height: 300px; overflow-y: auto;">
+                        <!-- 动态生成版本列表 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分享模态框 -->
+    <div class="modal fade" id="shareModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">分享文档</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">分享链接</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="shareLink" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyShareLink()">
+                                <i class="fas fa-copy"></i> 复制
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">权限设置</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="permission" id="readOnly" value="read" checked>
+                            <label class="form-check-label" for="readOnly">
+                                只读权限
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="permission" id="editPermission" value="edit">
+                            <label class="form-check-label" for="editPermission">
+                                编辑权限
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">邀请协作者</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="inviteEmail" placeholder="输入邮箱地址">
+                            <button class="btn btn-primary" type="button" onclick="inviteCollaborator()">
+                                <i class="fas fa-paper-plane"></i> 邀请
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+    <script>
+        // 全局变量
+        let currentUser = null;
+        let currentDocument = null;
+        let quill = null;
+        let ws = null;
+        let collaborators = new Map();
+        let activityHistory = [];
+        let versions = [];
+        let typingTimer = null;
+
+        // API基础URL
+        const API_BASE = '/api';
+        const WS_URL = `ws://${window.location.host}/ws`;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEditor();
+            checkAuthStatus();
+            loadDocumentFromUrl();
+            connectWebSocket();
+        });
+
+        // 检查认证状态
+        function checkAuthStatus() {
+            const token = localStorage.getItem('token');
+            const username = localStorage.getItem('username');
+            if (token && username) {
+                currentUser = { token, username };
+                document.getElementById('usernameDisplay').textContent = username;
+            } else {
+                // 未登录，重定向到主页
+                window.location.href = '/';
+            }
+        }
+
+        // 从URL加载文档
+        function loadDocumentFromUrl() {
+            const pathParts = window.location.pathname.split('/');
+            const docId = pathParts[pathParts.length - 1];
+            
+            if (docId && docId !== 'collaborate') {
+                fetch(`${API_BASE}/documents/${docId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentUser.token}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    currentDocument = data;
+                    document.getElementById('documentTitle').value = data.title;
+                    quill.root.innerHTML = data.content;
+                    
+                    // 加载协作者
+                    loadCollaborators();
+                    
+                    // 加载活动历史
+                    loadActivityHistory();
+                    
+                    // 加载版本历史
+                    loadVersions();
+                })
+                .catch(error => {
+                    console.error('Load document error:', error);
+                    alert('加载文档失败');
+                });
+            } else {
+                // 新建文档
+                currentDocument = {
+                    id: null,
+                    title: '',
+                    content: ''
+                };
+            }
+        }
+
+        // 初始化编辑器
+        function initializeEditor() {
+            const toolbarOptions = [
+                ['bold', 'italic', 'underline', 'strike'],
+                ['blockquote', 'code-block'],
+                [{ 'header': 1 }, { 'header': 2 }],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'script': 'sub'}, { 'script': 'super' }],
+                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                [{ 'direction': 'rtl' }],
+                [{ 'size': ['small', false, 'large', 'huge'] }],
+                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'font': [] }],
+                [{ 'align': [] }],
+                ['clean'],
+                ['link', 'image', 'video']
+            ];
+
+            quill = new Quill('#editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: toolbarOptions
+                }
+            });
+
+            // 监听编辑器变化
+            quill.on('text-change', function(delta, oldDelta, source) {
+                if (source === 'user') {
+                    // 发送编辑事件
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'edit',
+                            documentId: currentDocument.id,
+                            delta: delta
+                        }));
+                    }
+                    
+                    // 显示正在输入指示器
+                    showTypingIndicator();
+                }
+            });
+        }
+
+        // 连接WebSocket
+        function connectWebSocket() {
+            if (!currentUser) return;
+
+            ws = new WebSocket(`${WS_URL}?token=${currentUser.token}`);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                
+                // 发送加入文档消息
+                if (currentDocument.id) {
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        documentId: currentDocument.id
+                    }));
+                }
+            };
+            
+            ws.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                // 尝试重新连接
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        // 处理WebSocket消息
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'user-joined':
+                    addCollaborator(message.user);
+                    addActivity(`${message.user.username} 加入了协作`);
+                    break;
+                    
+                case 'user-left':
+                    removeCollaborator(message.userId);
+                    addActivity(`${message.username} 离开了协作`);
+                    break;
+                    
+                case 'edit':
+                    if (message.userId !== currentUser.username) {
+                        // 应用远程编辑
+                        quill.updateContents(message.delta, 'api');
+                        showCollaboratorTyping(message.userId);
+                    }
+                    break;
+                    
+                case 'cursor':
+                    updateCollaboratorCursor(message.userId, message.cursor);
+                    break;
+                    
+                case 'typing':
+                    showCollaboratorTyping(message.userId);
+                    break;
+                    
+                case 'document-saved':
+                    addActivity(`${message.username} 保存了文档`);
+                    break;
+            }
+        }
+
+        // 添加协作者
+        function addCollaborator(user) {
+            collaborators.set(user.id, user);
+            updateCollaboratorUI();
+        }
+
+        // 移除协作者
+        function removeCollaborator(userId) {
+            collaborators.delete(userId);
+            updateCollaboratorUI();
+        }
+
+        // 更新协作者UI
+        function updateCollaboratorUI() {
+            const collaboratorList = document.getElementById('collaboratorList');
+            const collaboratorCount = document.getElementById('collaboratorCount');
+            
+            collaboratorCount.textContent = collaborators.size + 1; // +1 for current user
+            
+            let html = '';
+            // 添加当前用户
+            html += `
+                <div class="d-flex align-items-center mb-2">
+                    <div class="collaborator-avatar me-2" style="background-color: #4caf50;">
+                        ${currentUser.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <div class="fw-bold">${currentUser.username} (我)</div>
+                        <div class="text-success" style="font-size: 12px;">
+                            <span class="online-indicator"></span> 在线
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 添加其他协作者
+            collaborators.forEach(user => {
+                html += `
+                    <div class="d-flex align-items-center mb-2">
+                        <div class="collaborator-avatar me-2" style="background-color: ${user.color || '#1e88e5'};">
+                            ${user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div class="fw-bold">${user.username}</div>
+                            <div class="text-success" style="font-size: 12px;">
+                                <span class="online-indicator"></span> 在线
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            collaboratorList.innerHTML = html;
+            
+            // 更新导航栏协作者头像
+            updateNavbarCollaborators();
+        }
+
+        // 更新导航栏协作者头像
+        function updateNavbarCollaborators() {
+            const collaboratorsDiv = document.getElementById('collaborators');
+            let html = '';
+            
+            // 当前用户头像
+            html += `
+                <div class="collaborator-avatar" style="background-color: #4caf50;" 
+                     title="${currentUser.username} (我)">
+                    ${currentUser.username.charAt(0).toUpperCase()}
+                </div>
+            `;
+            
+            // 其他协作者头像
+            collaborators.forEach(user => {
+                html += `
+                    <div class="collaborator-avatar" style="background-color: ${user.color || '#1e88e5'};" 
+                         title="${user.username}">
+                        ${user.username.charAt(0).toUpperCase()}
+                    </div>
+                `;
+            });
+            
+            collaboratorsDiv.innerHTML = html;
+        }
+
+        // 显示正在输入指示器
+        function showTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'inline-block';
+            
+            // 清除之前的定时器
+            if (typingTimer) {
+                clearTimeout(typingTimer);
+            }
+            
+            // 3秒后隐藏指示器
+            typingTimer = setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 3000);
+            
+            // 发送输入事件到WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'typing',
+                    documentId: currentDocument.id
+                }));
+            }
+        }
+
+        // 显示协作者正在输入
+        function showCollaboratorTyping(userId) {
+            const indicator = document.getElementById('typingIndicator');
+            const user = collaborators.get(userId);
+            if (user) {
+                indicator.innerHTML = `<i class="fas fa-keyboard"></i> ${user.username} 正在输入...`;
+                indicator.style.display = 'inline-block';
+                
+                setTimeout(() => {
+                    indicator.innerHTML = '<i class="fas fa-keyboard"></i> 正在输入...';
+                    indicator.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // 添加活动历史
+        function addActivity(message) {
+            const activity = {
+                message: message,
+                timestamp: new Date().toISOString()
+            };
+            
+            activityHistory.unshift(activity);
+            if (activityHistory.length > 10) {
+                activityHistory.pop();
+            }
+            
+            updateActivityUI();
+        }
+
+        // 更新活动UI
+        function updateActivityUI() {
+            const activityList = document.getElementById('activityList');
+            
+            if (activityHistory.length === 0) {
+                activityList.innerHTML = '<div class="text-muted">暂无活动记录</div>';
+                return;
+            }
+            
+            const html = activityHistory.map(activity => `
+                <div class="activity-item">
+                    <div>${activity.message}</div>
+                    <div class="activity-time">${formatTime(activity.timestamp)}</div>
+                </div>
+            `).join('');
+            
+            activityList.innerHTML = html;
+        }
+
+        // 加载协作者
+        function loadCollaborators() {
+            if (!currentDocument.id) return;
+            
+            fetch(`${API_BASE}/documents/${currentDocument.id}/collaborators`, {
+                headers: {
+                    'Authorization': `Bearer ${currentUser.token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(user => {
+                    if (user.username !== currentUser.username) {
+                        addCollaborator(user);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Load collaborators error:', error);
+            });
+        }
+
+        // 加载活动历史
+        function loadActivityHistory() {
+            if (!currentDocument.id) return;
+            
+            fetch(`${API_BASE}/documents/${currentDocument.id}/activities`, {
+                headers: {
+                    'Authorization': `Bearer ${currentUser.token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                activityHistory = data;
+                updateActivityUI();
+            })
+            .catch(error => {
+        console.error('Load activity history error:', error);
+            });
+        }
+
+        // 加载版本历史
+        function loadVersions() {
+            if (!currentDocument.id) return;
+            
+            fetch(`${API_BASE}/documents/${currentDocument.id}/versions`, {
+                headers: {
+                    'Authorization': `Bearer ${currentUser.token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                versions = data;
+                updateVersionUI();
+            })
+            .catch(error => {
+                console.error('Load versions error:', error);
+            });
+        }
+
+        // 更新版本UI
+        function updateVersionUI() {
+            const versionList = document.getElementById('versionList');
+            
+            if (versions.length === 0) {
+                versionList.innerHTML = '<div class="text-muted">暂无版本历史</div>';
+                return;
+            }
+            
+            const html = versions.map((version, index) => `
+                <div class="version-item ${index === 0 ? 'current' : ''}" onclick="switchVersion(${index})">
+                    <div class="fw-bold">版本 ${versions.length - index}</div>
+                    <div class="version-meta">
+                        <div><i class="far fa-user"></i> ${version.user.username}</div>
+                        <div><i class="far fa-clock"></i> ${formatTime(version.createdAt)}</div>
+                        <div><i class="far fa-file-alt"></i> ${version.changes || '内容更新'}</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            versionList.innerHTML = html;
+        }
+
+        // 切换版本
+        function switchVersion(index) {
+            const version = versions[index];
+            if (confirm(`确定要切换到版本 ${versions.length - index} 吗？当前未保存的内容将会丢失。`)) {
+                quill.root.innerHTML = version.content;
+                
+                // 更新UI
+                document.querySelectorAll('.version-item').forEach((item, i) => {
+                    item.classList.toggle('current', i === index);
+                });
+                
+                addActivity(`切换到版本 ${versions.length - index}`);
+            }
+        }
+
+        // 保存文档
+        function saveDocument() {
+            if (!currentDocument) return;
+
+            const title = document.getElementById('documentTitle').value.trim();
+            if (!title) {
+                alert('请输入文档标题');
+                return;
+            }
+
+            const content = quill.root.innerHTML;
+            const documentData = {
+                title: title,
+                content: content
+            };
+
+            const url = currentDocument.id ? 
+                `${API_BASE}/documents/${currentDocument.id}` : 
+                `${API_BASE}/documents`;
+            
+            const method = currentDocument.id ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentUser.token}`
+                },
+                body: JSON.stringify(documentData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                currentDocument = data;
+                addActivity('保存了文档');
+                
+                // 发送保存事件到WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'document-saved',
+                        documentId: currentDocument.id,
+                        username: currentUser.username
+                    }));
+                }
+                
+                alert('文档保存成功！');
+                
+                // 如果是新文档，重定向到编辑页面
+                if (!currentDocument.id) {
+                    window.location.href = `/collaborate/${data.id}`;
+                }
+            })
+            .catch(error => {
+                console.error('Save document error:', error);
+                alert('保存失败，请重试');
+            });
+        }
+
+        // 分享文档
+        function shareDocument() {
+            if (!currentDocument.id) {
+                alert('请先保存文档');
+                return;
+            }
+            
+            const shareLink = `${window.location.origin}/collaborate/${currentDocument.id}`;
+            document.getElementById('shareLink').value = shareLink;
+            
+            const modal = new bootstrap.Modal(document.getElementById('shareModal'));
+            modal.show();
+        }
+
+        // 复制分享链接
+        function copyShareLink() {
+            const shareLink = document.getElementById('shareLink');
+            shareLink.select();
+            document.execCommand('copy');
+            
+            // 显示复制成功提示
+            const button = event.target.closest('button');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-check"></i> 已复制';
+            button.classList.remove('btn-outline-secondary');
+            button.classList.add('btn-success');
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-secondary');
+            }, 2000);
+        }
+
+        // 邀请协作者
+        function inviteCollaborator() {
+            const email = document.getElementById('inviteEmail').value.trim();
+            if (!email) {
+                alert('请输入邮箱地址');
+                return;
+            }
+            
+            const permission = document.querySelector('input[name="permission"]:checked').value;
+            
+            fetch(`${API_BASE}/documents/${currentDocument.id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentUser.token}`
+                },
+                body: JSON.stringify({
+                    email: email,
+                    permission: permission
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('邀请已发送！');
+                document.getElementById('inviteEmail').value = '';
+            })
+            .catch(error => {
+                console.error('Invite collaborator error:', error);
+                alert('邀请发送失败，请重试');
+            });
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            window.location.href = '/';
+        }
+
+        // 工具函数
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) {
+                return '刚刚';
+            } else if (diff < 3600000) {
+                return Math.floor(diff / 60000) + '分钟前';
+            } else if (diff < 86400000) {
+                return Math.floor(diff / 3600000) + '小时前';
+            } else {
+                return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            }
+        }
+
+        // 页面卸载时断开WebSocket
+        window.addEventListener('beforeunload', function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'leave',
+                    documentId: currentDocument.id
+                }));
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>
